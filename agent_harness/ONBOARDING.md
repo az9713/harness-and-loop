@@ -157,6 +157,81 @@ trace
 
 The current implementation keeps both loops local and deterministic.
 
+## ASCII Architecture Diagram
+
+```text
+                                agent_harness/
+
+  User / CLI
+      |
+      |  python agent_harness/run_harness.py "task"
+      v
++-------------------+        creates         +----------------------+
+| run_harness.py    | ---------------------> | HarnessRuntime       |
+| CLI entrypoint    |                        | src/harness/runtime  |
++-------------------+                        +----------+-----------+
+                                                      |
+                                                      | wires components
+                                                      v
++--------------------------------------------------------------------------------+
+|                                Runtime Loop                                     |
+|                                                                                |
+|  +-------------+     +----------------+     +----------------+                 |
+|  | RunState    | --> | MemoryStore    | --> | ContextAssembler|                 |
+|  | task, obs,  |     | procedural     |     | system prompt   |                 |
+|  | final, iter |     | semantic       |     | acceptance      |                 |
+|  +------+------+     | episodic       |     | memory hits     |                 |
+|         ^            +----------------+     +--------+-------+                 |
+|         |                                             |                         |
+|         |                                             v                         |
+|         |                                    +----------------+                 |
+|         |                                    | Planner        |                 |
+|         |                                    | RuleBased now  |                 |
+|         |                                    | LLM seam later |                 |
+|         |                                    +--------+-------+                 |
+|         |                                             | Action                  |
+|         |                                             v                         |
+|         |                                    +----------------+                 |
+|         |                                    | PermissionPolicy|                |
+|         |                                    | allow-list +    |                |
+|         |                                    | approval guard  |                |
+|         |                                    +--------+-------+                 |
+|         |                                             | allowed tool            |
+|         |                                             v                         |
+|         |                                    +----------------+                 |
+|         +----------------------------------- | ToolRegistry   |                 |
+|              ToolResult observation         | retrieve_memory|                 |
+|                                             | read_sources   |                 |
+|                                             | make_plan      |                 |
+|                                             +----------------+                 |
+|                                                                                |
+|  Stop when final answer, blocked reason, or max_iterations is reached.          |
++--------------------------------------------------------------------------------+
+                                                      |
+                                                      | completed RunState
+                                                      v
++--------------------------------------------------------------------------------+
+|                                  LLM Ops Loop                                   |
+|                                                                                |
+|   +----------------+       +----------------+       +----------------+          |
+|   | TraceRecorder  | ----> | Evaluator      | ----> | ReleaseGate    |          |
+|   | runs.jsonl     |       | checks answer, |       | allow/block    |          |
+|   | event history  |       | terms, loop,   |       | release        |          |
+|   | final + eval   |       | observations   |       |                |          |
+|   +----------------+       +----------------+       +----------------+          |
++--------------------------------------------------------------------------------+
+
+Data inputs:
+
+  ai/system_prompt.md                 -> operating policy
+  ai/acceptance_criteria.md           -> success criteria
+  skills/**/SKILL.md                  -> procedural memory
+  memory/semantic.jsonl               -> durable facts
+  memory/episodic.jsonl               -> dated events
+  evals/golden_cases.jsonl            -> deterministic eval requirements
+  local transcript/summary .txt files -> optional, ignored by Git
+```
+
 ## Main Components
 
 ### `run_harness.py`
