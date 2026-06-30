@@ -1,0 +1,5 @@
+{"id":"sem-001","topic":"harness","text":"A harness is the engineered control shell around an LLM: prompt assembly, memory retrieval, tool permissions, loop control, guardrails, tracing, evals, and release gates."}
+{"id":"sem-002","topic":"memory","text":"Working memory is temporary context RAM. Durable memory must be explicitly written and retrieved."}
+{"id":"sem-003","topic":"llm-ops","text":"LLM Ops is the outer improvement loop: trace runs, evaluate quality, observe health, diagnose root causes, and gate releases."}
+{"id":"sem-004","topic":"loop","text":"Loop engineering controls repeated tool calls and defines when an agent should stop, ask for input, or fail closed."}
+

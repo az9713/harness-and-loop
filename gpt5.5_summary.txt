@@ -1,0 +1,1077 @@
+https://chatgpt.com/c/6a433c13-d194-83e8-ab48-ce7c949dcc8b
+
+
+## Reconstructed Tutorial: Agent Harness + LLM Ops
+
+The image is teaching a simple but important architecture:
+
+> **The LLM is not the product. The harness is the product.**
+> The model is a stochastic policy inside a larger deterministic runtime that controls context, memory, tools, permissions, tracing, evaluation, and release.
+
+The diagram has two big systems:
+
+| Layer       | Purpose                                                                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Harness** | Runs the agent: prompt assembly, memory retrieval, tool loop, working context, guardrails, reply generation.      |
+| **LLM Ops** | Measures and improves the harness: traces, evals, observability, diagnosis, release gates, config/prompt updates. |
+
+The left side is the **agent runtime**.
+The right side is the **production improvement loop**.
+
+---
+
+# 1. What “Harness” Means
+
+A **harness** is the engineered control shell around the LLM.
+
+It includes:
+
+```text
+system prompt
+user prompt
+chat history
+working memory
+long-term memory
+tool registry
+permissions
+retrieval
+agent loop
+guardrails
+state machine
+traces
+evals
+release gates
+```
+
+So the model is only one component:
+
+```text
+Agent = LLM + context assembler + memory + tools + loop + guardrails + evaluator + observability
+```
+
+The image labels this red box as:
+
+```text
+Harness
+e.g. LangGraph, LangChain, Pydantic
+```
+
+That is accurate. LangGraph/LangChain/Pydantic are not “the agent.” They are ways to build the runtime around the model.
+
+---
+
+# 2. The Core Execution Flow
+
+The visible flow is roughly:
+
+```text
+User Prompt
+   ↓
+Current Chat History
+   ↓
+System Prompt
+   ↓
+Working Memory / Context RAM
+   ↓
+LLM + Q&A Agent
+   ↓
+Tool Loop
+   ↓
+End Loop Guardrails
+   ↓
+Reply
+```
+
+The important distinction:
+
+| Component                        | Role                                          |
+| -------------------------------- | --------------------------------------------- |
+| **User Prompt**                  | What the user wants now.                      |
+| **System Prompt**                | Stable operating policy.                      |
+| **Current Chat History**         | Recent conversational context.                |
+| **Working Memory / Context RAM** | The temporary context assembled for this run. |
+| **LLM Agent**                    | The reasoning/generation engine.              |
+| **Tool Loop**                    | Repeated calls to external tools.             |
+| **End Loop Guardrails**          | Conditions that stop the loop safely.         |
+| **Reply**                        | Final user-facing output.                     |
+
+The diagram says:
+
+> “AI Agent runs everything inside the box is ephemeral”
+
+Meaning: the actual prompt context is temporary. Once the run ends, the context window disappears unless you deliberately save things into durable memory or logs.
+
+This is the first major design lesson:
+
+> **Context is not memory. Context is RAM. Memory must be explicitly written.**
+
+---
+
+# 3. The Three Memory Types
+
+The image shows three memory stores under the runtime:
+
+```text
+Procedural Memory
+Semantic Memory
+Episodic Memory
+```
+
+These correspond to three different knowledge classes.
+
+## 3.1 Procedural Memory
+
+The image labels this as:
+
+```text
+Procedural Memory
+- files, text
+- how to act
+- skills instructions
+```
+
+This is **how-to knowledge**.
+
+Examples:
+
+```text
+how to review a PR
+how to write a research memo
+how to use the repo
+how to call an internal API
+how to generate a release note
+how to perform financial analysis
+```
+
+In a solo-dev harness, procedural memory should live as explicit files:
+
+```text
+skills/
+  pr_review/SKILL.md
+  financial_research/SKILL.md
+  bugfix/SKILL.md
+  deep_research/SKILL.md
+
+ai/
+  00_project_brief.md
+  01_architecture.md
+  02_rules.md
+  03_repo_map.md
+  04_plan_template.md
+  05_acceptance_criteria.md
+  06_test_policy.md
+```
+
+Procedural memory should be **versioned in Git**.
+
+Do not hide it inside vague prompts. Make it inspectable.
+
+---
+
+## 3.2 Semantic Memory
+
+The image labels this as:
+
+```text
+Semantic Memory
+- vector store
+- durable facts
+- user profile
+```
+
+This is **fact memory**.
+
+Examples:
+
+```text
+User prefers pip over uv.
+User works on Windows + VSCode.
+The project uses FastAPI.
+The API base URL is ...
+The repo uses pytest.
+The customer is in healthcare.
+```
+
+Semantic memory is usually retrieved by **topical relevance**.
+
+The image says:
+
+```text
+RAG for relevance
+topic search
+```
+
+Meaning: when the current task is about “agent harness,” retrieve durable facts related to harness; when it is about “Medicare,” retrieve Medicare-related facts; when it is about “walking cadence,” retrieve exercise facts.
+
+A semantic memory store often uses:
+
+```text
+embeddings
+vector DB
+metadata filters
+document chunks
+```
+
+Examples:
+
+```text
+Chroma
+FAISS
+pgvector
+LanceDB
+Weaviate
+Pinecone
+```
+
+---
+
+## 3.3 Episodic Memory
+
+The image labels this as:
+
+```text
+Episodic Memory
+- SQL DB + Vector store
+- dated events
+- past chat history
+```
+
+This is **event memory**.
+
+Examples:
+
+```text
+On 2026-06-27 the user asked about Redis.
+On 2026-06-24 the user saved a minimum AI-coding harness structure.
+On 2026-06-29 the user uploaded a bowel movement image.
+On 2026-06-25 the user asked about US grid constraints and AI data centers.
+```
+
+Episodic memory requires time indexing.
+
+That is why the diagram says:
+
+```text
+RAG for relevance
+SQL for recency
+```
+
+A vector store gives semantic similarity.
+A SQL database gives exact time/order queries.
+
+The right implementation is usually hybrid:
+
+```text
+events table in Postgres/SQLite
++
+embedding index over event summaries
+```
+
+---
+
+# 4. The Summarizer / Distiller Agent
+
+At the bottom of the memory system, the diagram shows:
+
+```text
+Summarizer Agent
+cheaper models
+```
+
+This is critical.
+
+You do not want to save every raw conversation into semantic memory. That creates garbage memory, drift, contradictions, and retrieval noise.
+
+Instead, after some number of chats, a summarizer/distiller runs:
+
+```text
+raw messages
+   ↓
+summarizer agent
+   ↓
+candidate facts / events / preferences
+   ↓
+validation
+   ↓
+write to semantic or episodic memory
+```
+
+The diagram says something like:
+
+```text
+Only consolidate after N new chats
+Distill into facts
+Save the messages
+```
+
+The right rule:
+
+| Raw artifact         | Destination              |
+| -------------------- | ------------------------ |
+| Full chat transcript | Episodic store / archive |
+| Dated event summary  | Episodic memory          |
+| Stable durable fact  | Semantic memory          |
+| How-to instruction   | Procedural memory        |
+| Temporary task state | Working memory only      |
+
+A good memory pipeline asks:
+
+```text
+Is this durable?
+Is this user-specific?
+Will this improve future answers?
+Is it sensitive?
+Does it conflict with existing memory?
+Does it need expiration?
+```
+
+---
+
+# 5. The Agent Loop
+
+The orange box in the image is labeled:
+
+```text
+Loop
+```
+
+Inside it:
+
+```text
+Agentic Tools
+e.g.
+- schedule meeting
+- read/write in CRM
+- fetch payment info
+```
+
+Then:
+
+```text
+Tool Calls ↓
+Responses ↑
+```
+
+This is the classic agent control loop:
+
+```text
+1. Read task.
+2. Assemble context.
+3. Decide next action.
+4. Call tool.
+5. Observe tool result.
+6. Update working state.
+7. Decide whether to continue.
+8. Stop when done or unsafe.
+```
+
+In pseudocode:
+
+```python
+while not done:
+    context = assemble_context(task, history, memory, tool_results)
+    action = llm.decide(context)
+
+    if action.type == "tool_call":
+        if permission_guard.allows(action):
+            result = execute_tool(action)
+            trace.log(action, result)
+        else:
+            result = "Permission denied"
+            trace.log_blocked(action)
+
+    elif action.type == "final_answer":
+        done = guardrails.check_final_answer(action)
+```
+
+The important point:
+
+> The LLM proposes actions. The harness authorizes, executes, observes, and records them.
+
+That separation prevents the model from being sovereign.
+
+---
+
+# 6. End-Loop Guardrails
+
+The diagram shows:
+
+```text
+End Loop Guardrails
+```
+
+These are stopping conditions.
+
+A production harness should not let the model loop indefinitely.
+
+Minimum guardrails:
+
+| Guardrail                  | Purpose                                             |
+| -------------------------- | --------------------------------------------------- |
+| **Max iterations**         | Prevent infinite loops.                             |
+| **Max token/cost budget**  | Prevent cost explosion.                             |
+| **Tool permission checks** | Prevent unauthorized action.                        |
+| **No-progress detector**   | Stop repeated useless tool calls.                   |
+| **Evidence requirement**   | Force claims to be grounded.                        |
+| **Risk classifier**        | Escalate dangerous actions.                         |
+| **Human approval gate**    | Require user confirmation for irreversible actions. |
+| **Final answer validator** | Check output against task requirements.             |
+
+For your harness memory category, the important principle applies here:
+
+> **Agentic systems require adversarial objective design.**
+
+Meaning: do not merely ask, “Did the agent complete the task?”
+Also ask, “How could the agent appear to complete the task while violating intent?”
+
+Examples:
+
+```text
+It passed tests by deleting tests.
+It summarized a document by hallucinating missing sections.
+It sent an email without confirming recipient ambiguity.
+It optimized for speed by skipping verification.
+It got a high judge score by flattering the judge prompt.
+```
+
+The evaluator must be adversarial, not just approving.
+
+---
+
+# 7. LLM Ops: The Right-Side System
+
+The blue box on the right is labeled:
+
+```text
+LLM Ops
+```
+
+The flow is approximately:
+
+```text
+Reply
+   ↓
+Trace
+   ↓
+Eval
+   ↓
+Observe
+   ↓
+Diagnose
+   ↓
+Gate
+   ↓
+Release
+   ↓
+Improved System Prompt + Config
+   ↓
+back into Harness
+```
+
+This is the production improvement loop.
+
+The diagram includes these labels:
+
+```text
+Trace
+1 trace per run
+Langfuse, LangSmith
+
+Eval
+"was it good?"
+LLM-as-a-judge + scores
+
+Observe
+"was it healthy?"
+Tracks tokens, latency, errors
+
+Diagnose
+"where/why it was broken?"
+
+Gate
+
+Release
+Ship the fix safely
+new prompt version
+model config
+tool change
+RAG param
+```
+
+This is the second major lesson:
+
+> **Agent quality does not improve by vibes. It improves by instrumentation, evals, diagnosis, and gated release.**
+
+---
+
+# 8. Trace
+
+A **trace** is the full execution record of one agent run.
+
+It should include:
+
+```text
+input prompt
+system prompt version
+model name
+model parameters
+retrieved memories
+retrieved documents
+tool calls
+tool outputs
+intermediate reasoning summaries
+final answer
+latency
+token usage
+cost
+errors
+eval scores
+```
+
+Tools:
+
+```text
+Langfuse
+LangSmith
+Braintrust
+Arize Phoenix
+OpenTelemetry
+custom JSON logs
+```
+
+A trace lets you answer:
+
+```text
+What did the agent see?
+What did it retrieve?
+Which tool did it call?
+What did the tool return?
+Why did it fail?
+Was the failure prompt, retrieval, model, tool, or evaluator?
+```
+
+Without traces, debugging agents is mostly superstition.
+
+---
+
+# 9. Eval
+
+The diagram says:
+
+```text
+Eval
+"was it good?"
+LLM-as-a-judge + scores
+```
+
+An eval converts subjective quality into measured quality.
+
+Minimum eval types:
+
+| Eval Type                    | Example                                                    |
+| ---------------------------- | ---------------------------------------------------------- |
+| **Exact check**              | Did output include required JSON schema?                   |
+| **Unit test**                | Did generated code pass tests?                             |
+| **Golden answer comparison** | Did answer match known correct answer?                     |
+| **Rubric judge**             | Did answer satisfy accuracy, completeness, citation, tone? |
+| **Tool correctness**         | Did it call the right tool with valid parameters?          |
+| **Safety eval**              | Did it avoid prohibited actions?                           |
+| **Regression eval**          | Did a new prompt break old behavior?                       |
+
+LLM-as-judge is useful but insufficient.
+
+A good eval stack combines:
+
+```text
+deterministic checks
++
+LLM judge
++
+human spot-checks
++
+task-specific tests
+```
+
+For agent harnesses, evals must check the whole trajectory, not only the final answer.
+
+Bad eval:
+
+```text
+Was the final answer nice?
+```
+
+Better eval:
+
+```text
+Did the agent retrieve the right evidence?
+Did it avoid unnecessary tools?
+Did it respect permissions?
+Did it terminate correctly?
+Did it cite sources?
+Did it preserve user constraints?
+Did it avoid making irreversible changes?
+```
+
+---
+
+# 10. Observe
+
+The diagram says:
+
+```text
+Observe
+"was it healthy?"
+Tracks tokens, latency, errors
+```
+
+Observability is not about correctness. It is about runtime health.
+
+Track:
+
+```text
+latency
+token usage
+cost
+tool failure rate
+retry rate
+timeout rate
+context size
+retrieval count
+empty retrieval rate
+loop iterations
+judge score distribution
+user correction rate
+```
+
+Important operational metrics:
+
+| Metric              | Failure Signal                                        |
+| ------------------- | ----------------------------------------------------- |
+| Token count rising  | Context stuffing, memory bloat.                       |
+| Latency rising      | Tool bottleneck, model choice, retry loop.            |
+| Cost rising         | Bad model routing, too many evals, excessive context. |
+| Tool failures       | API schema drift, bad arguments, permissions issue.   |
+| Low eval score      | Prompt/model/retrieval failure.                       |
+| High variance       | Unstable prompt or model.                             |
+| Long loops          | Poor planning or missing stop rule.                   |
+| Retrieval miss rate | Bad memory indexing or query construction.            |
+
+Observation tells you **something is wrong**.
+Diagnosis tells you **what is wrong**.
+
+---
+
+# 11. Diagnose
+
+The diagram asks:
+
+```text
+"Where/why it was broken?"
+```
+
+Common failure modes:
+
+| Failure                    | Likely Root Cause                             |
+| -------------------------- | --------------------------------------------- |
+| Hallucinated answer        | Missing retrieval, weak evidence guardrail.   |
+| Wrong tool call            | Bad tool schema, ambiguous tool descriptions. |
+| Infinite loop              | No max iteration or no-progress detector.     |
+| Too expensive              | Excessive context, wrong model routing.       |
+| Stale answer               | Recency retrieval missing.                    |
+| Ignores user preference    | Semantic memory not retrieved.                |
+| Bad final output           | Missing output schema or weak eval.           |
+| Unsafe action              | Permission layer too weak.                    |
+| Passed eval but bad answer | Judge prompt too soft; reward hacking.        |
+
+A good diagnosis pipeline asks:
+
+```text
+Was the input ambiguous?
+Was the prompt wrong?
+Was relevant memory retrieved?
+Was the retrieved memory stale?
+Was the model too weak?
+Did the tool fail?
+Did the agent misuse the tool?
+Did the evaluator miss the failure?
+Did the release gate allow a regression?
+```
+
+---
+
+# 12. Gate
+
+The diagram has a diamond:
+
+```text
+Gate
+```
+
+This is the release decision.
+
+Roughly:
+
+```text
+if eval passed:
+    release
+else:
+    fix bug
+    re-run
+    re-trace
+    re-eval
+```
+
+The image explicitly shows:
+
+```text
+eval not passed
+fix bug, re-run, re-trace, re-eval
+```
+
+The gate is what makes LLM Ops production-grade.
+
+A solo developer should have at least three gates:
+
+```text
+1. Unit tests pass.
+2. Golden evals do not regress.
+3. Cost/latency stay within budget.
+```
+
+For higher-risk agents:
+
+```text
+4. Human approval required.
+5. Security/safety eval passes.
+6. Tool permission diff reviewed.
+```
+
+---
+
+# 13. Release
+
+The diagram says release can include:
+
+```text
+new prompt version
+model config
+tool change
+RAG param
+```
+
+That is exactly right.
+
+In agent systems, a “release” is not only code.
+
+You may release:
+
+```text
+system prompt v17
+model change: GPT-5.5 → Claude Sonnet
+temperature change
+tool schema change
+retrieval top_k change
+memory filter change
+judge rubric change
+new skill file
+new permission policy
+new planner prompt
+new fallback model
+```
+
+Therefore every run should log:
+
+```text
+prompt_version
+model_version
+tool_version
+retrieval_config_version
+memory_snapshot_id
+eval_suite_version
+```
+
+Otherwise, you cannot reproduce failures.
+
+---
+
+# 14. The Full Closed Loop
+
+Putting the image together:
+
+```text
+User asks task
+   ↓
+Harness assembles working context
+   ↓
+LLM enters tool loop
+   ↓
+Agent calls tools under guardrails
+   ↓
+Harness produces reply
+   ↓
+Messages and events are saved
+   ↓
+Summarizer distills durable facts
+   ↓
+LLM Ops traces the run
+   ↓
+Evals score the run
+   ↓
+Observability checks health
+   ↓
+Diagnosis finds failure cause
+   ↓
+Gate decides release/no-release
+   ↓
+Prompt/config/tool/RAG changes go back into harness
+```
+
+This is the key architecture:
+
+```text
+Harness = runtime control loop
+LLM Ops = improvement control loop
+```
+
+The agent has an inner loop.
+The organization has an outer loop.
+
+---
+
+# 15. Mathematical Framing
+
+For rigorous thinking, model the harness as a constrained partially observable control system.
+
+Let:
+
+```text
+s_t = true world/task state
+o_t = observation available to the agent
+m_t = memory state
+c_t = assembled context
+a_t = action chosen by model
+u_t = tool/world update
+r_t = task reward or utility
+g_t = guardrail predicate
+b_t = budget state
+```
+
+The LLM is a stochastic policy:
+
+```text
+a_t ~ πθ(a | c_t)
+```
+
+The harness is the controller:
+
+```text
+H: (o_t, m_t, b_t, policy, permissions) → allowed action set A_t
+```
+
+So the executable action is not simply:
+
+```text
+a_t = LLM(context)
+```
+
+It is:
+
+```text
+a_t ∈ A_allowed(s_t, permissions, budget, risk)
+```
+
+The objective is constrained optimization:
+
+```text
+maximize     E[Utility(task success, user satisfaction)]
+subject to   cost ≤ budget
+             latency ≤ SLA
+             unsafe_action_probability ≤ ε
+             evidence_requirements satisfied
+             eval_score ≥ threshold
+             irreversible actions require approval
+```
+
+This is why the harness matters.
+
+The LLM is probabilistic.
+The harness makes the system operationally bounded.
+
+Your saved formulation remains the right one:
+
+> **Let the model think probabilistically; make the harness act deterministically.**
+
+---
+
+# 16. Minimal Buildable Version for a Solo Developer
+
+A useful MVP does not need enterprise infra.
+
+Start with this:
+
+```text
+agent-harness/
+  ai/
+    00_project_brief.md
+    01_architecture.md
+    02_rules.md
+    03_repo_map.md
+    04_plan_template.md
+    05_acceptance_criteria.md
+    06_test_policy.md
+
+  skills/
+    research/SKILL.md
+    coding/SKILL.md
+    email/SKILL.md
+    eval/SKILL.md
+
+  memory/
+    semantic.jsonl
+    episodic.sqlite
+    procedural/
+
+  evals/
+    golden_cases.jsonl
+    rubrics/
+      answer_quality.md
+      tool_use.md
+      safety.md
+
+  traces/
+    runs.jsonl
+
+  src/
+    context_assembler.py
+    memory.py
+    tools.py
+    permissions.py
+    agent_loop.py
+    evaluator.py
+    release_gate.py
+```
+
+Minimum runtime:
+
+```text
+1. Load task.
+2. Load system prompt.
+3. Retrieve procedural skill.
+4. Retrieve semantic facts.
+5. Retrieve recent episodic events.
+6. Assemble context.
+7. Run LLM/tool loop.
+8. Save trace.
+9. Run eval.
+10. Gate result.
+11. Save useful memory.
+```
+
+Minimum LLM Ops:
+
+```text
+1. Every run gets a trace.
+2. Every important task gets an eval score.
+3. Failures get diagnosed.
+4. Prompt/config changes are versioned.
+5. Nothing “improved” ships unless old evals still pass.
+```
+
+---
+
+# 17. Example: Coding Agent Harness
+
+Suppose the user says:
+
+```text
+Fix the login bug and make sure tests pass.
+```
+
+A weak agent does this:
+
+```text
+Send prompt to model → model edits files → hope it works
+```
+
+A harnessed agent does this:
+
+```text
+1. Load repo rules from ai/02_rules.md.
+2. Load architecture from ai/01_architecture.md.
+3. Retrieve coding skill from skills/coding/SKILL.md.
+4. Retrieve recent bug history from episodic memory.
+5. Ask model to produce plan.
+6. Check plan against acceptance criteria.
+7. Allow read-only tools first.
+8. Permit file edits only inside repo sandbox.
+9. Run tests.
+10. If tests fail, loop with bounded retries.
+11. Generate final summary with changed files and evidence.
+12. Save trace.
+13. Run eval:
+    - Did tests pass?
+    - Were unrelated files changed?
+    - Was the bug actually addressed?
+    - Did cost stay within budget?
+14. Gate:
+    - pass → allow merge/release
+    - fail → diagnose and retry
+```
+
+This is the difference between “AI coding” and an **AI coding harness**.
+
+---
+
+# 18. What the Image Is Really Teaching
+
+The image is not merely about memory. It is about **system boundaries**.
+
+The core boundaries are:
+
+| Boundary                                      | Meaning                                                  |
+| --------------------------------------------- | -------------------------------------------------------- |
+| **Working memory vs durable memory**          | Context disappears; explicit memory persists.            |
+| **LLM vs harness**                            | Model proposes; harness controls.                        |
+| **Agent loop vs LLM Ops loop**                | Agent does task; Ops improves system.                    |
+| **Eval vs observe**                           | Eval checks quality; observe checks runtime health.      |
+| **Diagnosis vs release**                      | Failure analysis precedes safe deployment.               |
+| **Procedural vs semantic vs episodic memory** | Skills, facts, and events are different storage classes. |
+
+The most important design move is separating **runtime execution** from **system improvement**.
+
+```text
+Runtime question:
+Can the agent complete this task now?
+
+LLM Ops question:
+Is this agent getting better, safer, cheaper, and more reliable over time?
+```
+
+---
+
+# 19. Practical Design Rules
+
+Use these rules as the compact operating doctrine:
+
+```text
+1. Do not stuff context. Assemble it.
+2. Do not trust memory. Retrieve, rank, and validate it.
+3. Do not let the LLM execute directly. Put tools behind permissions.
+4. Do not rely on final answers only. Trace the trajectory.
+5. Do not ship prompt changes by vibes. Gate them with evals.
+6. Do not use one memory type for everything. Separate procedural, semantic, episodic.
+7. Do not let the model judge itself alone. Use adversarial evals.
+8. Do not optimize for task success only. Also optimize cost, latency, safety, and reproducibility.
+9. Do not make the harness invisible. Version prompts, tools, configs, skills, and evals.
+10. Do not treat failures as anecdotes. Convert them into eval cases.
+```
+
+---
+
+# 20. One-Sentence Compression
+
+The diagram’s complete lesson is:
+
+> Build the agent as a controlled loop inside a harness, persist only the right memories, instrument every run, evaluate outputs and trajectories, diagnose failures, and release prompt/model/tool/RAG changes only through gates.
+
+That is the practical bridge from “chatbot” to “production agent.”

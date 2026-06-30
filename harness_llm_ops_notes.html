@@ -1,0 +1,1083 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Harness and LLM Ops Notes</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 fill=%27%23126a5a%27/%3E%3Cpath d=%27M3 8h10M8 3v10%27 stroke=%27white%27 stroke-width=%272%27/%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --bg: #f7f7f2;
+      --paper: #fffdf7;
+      --ink: #1e2320;
+      --muted: #65706a;
+      --line: #d7d8cc;
+      --accent: #126a5a;
+      --accent-2: #b4472e;
+      --accent-3: #345f8a;
+      --amber: #f1b44c;
+      --green-soft: #e5f1eb;
+      --blue-soft: #e7eef6;
+      --red-soft: #f7e7e3;
+      --shadow: 0 18px 45px rgba(34, 38, 36, 0.12);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, rgba(18, 106, 90, 0.08), transparent 310px),
+        var(--bg);
+      line-height: 1.55;
+    }
+
+    button, input { font: inherit; }
+
+    .shell {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    header {
+      min-height: 72vh;
+      display: grid;
+      align-items: end;
+      padding: 28px 0 42px;
+      border-bottom: 1px solid var(--line);
+      background:
+        linear-gradient(90deg, rgba(247, 247, 242, 0.96) 0%, rgba(247, 247, 242, 0.88) 48%, rgba(247, 247, 242, 0.20) 100%),
+        url("harness_llm_ops.png") right center / min(58vw, 720px) auto no-repeat;
+    }
+
+    .hero {
+      max-width: 720px;
+      padding-top: 12vh;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 18px;
+      color: var(--accent);
+      font-size: 0.84rem;
+      font-weight: 750;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 26px;
+      height: 3px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    h1 {
+      margin: 0 0 18px;
+      font-size: clamp(2.6rem, 7vw, 6.1rem);
+      line-height: 0.94;
+      letter-spacing: 0;
+      max-width: 760px;
+    }
+
+    .lede {
+      margin: 0;
+      max-width: 680px;
+      color: #36413c;
+      font-size: clamp(1.06rem, 1.8vw, 1.32rem);
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 42px;
+      border: 1px solid var(--ink);
+      border-radius: 6px;
+      padding: 0 14px;
+      color: var(--ink);
+      background: transparent;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+    }
+
+    .btn:hover,
+    .btn:focus-visible {
+      transform: translateY(-1px);
+      background: var(--ink);
+      color: var(--paper);
+      outline: none;
+    }
+
+    .btn.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: white;
+    }
+
+    nav.sticky {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(247, 247, 242, 0.92);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 10px 0;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    .nav-links a {
+      white-space: nowrap;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 7px 10px;
+      border-radius: 5px;
+      font-size: 0.9rem;
+    }
+
+    .nav-links a:hover,
+    .nav-links a.active {
+      color: var(--ink);
+      background: #ecece3;
+    }
+
+    .search {
+      position: relative;
+      flex: 0 0 min(310px, 32vw);
+    }
+
+    .search input {
+      width: 100%;
+      min-height: 38px;
+      padding: 0 12px 0 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    .search span {
+      position: absolute;
+      left: 12px;
+      top: 8px;
+      color: var(--muted);
+      pointer-events: none;
+    }
+
+    main {
+      padding: 38px 0 68px;
+    }
+
+    section {
+      scroll-margin-top: 76px;
+      padding: 38px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(280px, 0.55fr);
+      gap: 34px;
+      align-items: end;
+      margin-bottom: 24px;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-size: clamp(1.8rem, 3.6vw, 3.4rem);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: 0 1px 0 rgba(34, 38, 36, 0.04);
+    }
+
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 1.02rem;
+      line-height: 1.2;
+    }
+
+    .card p { margin: 0; color: #3e4843; }
+
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-6 { grid-column: span 6; }
+    .span-7 { grid-column: span 7; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 9px;
+      color: var(--muted);
+      background: #f8f6ed;
+      font-size: 0.78rem;
+      font-weight: 650;
+    }
+
+    .kicker {
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      margin-bottom: 8px;
+    }
+
+    .quote {
+      border-left: 5px solid var(--accent);
+      background: var(--green-soft);
+      padding: 18px 20px;
+      border-radius: 6px;
+      font-size: 1.16rem;
+      font-weight: 680;
+      color: #172b25;
+    }
+
+    .diagram {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .lane {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      min-height: 100%;
+    }
+
+    .lane h3 {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 0 14px;
+      font-size: 1.18rem;
+    }
+
+    .node-list {
+      display: grid;
+      gap: 9px;
+    }
+
+    .node {
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 12px 13px;
+      background: #fbfaf3;
+      color: var(--ink);
+      cursor: pointer;
+      transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+    }
+
+    .node:hover,
+    .node.active {
+      border-color: var(--accent);
+      background: var(--green-soft);
+      transform: translateY(-1px);
+    }
+
+    .node strong {
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .node small {
+      color: var(--muted);
+    }
+
+    .detail-panel {
+      margin-top: 16px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fffaf0;
+      padding: 16px;
+      min-height: 128px;
+    }
+
+    .detail-panel h4 {
+      margin: 0 0 6px;
+      font-size: 1rem;
+    }
+
+    .detail-panel p {
+      margin: 0 0 10px;
+      color: #3e4843;
+    }
+
+    .timestamp {
+      color: var(--accent-3);
+      font-weight: 750;
+      font-size: 0.83rem;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .tab {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 12px;
+      background: var(--paper);
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .tab[aria-selected="true"] {
+      background: var(--ink);
+      color: var(--paper);
+      border-color: var(--ink);
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 12px 13px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eeeee5;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      color: #444c48;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .timeline {
+      display: grid;
+      gap: 12px;
+      counter-reset: step;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+
+    .step::before {
+      counter-increment: step;
+      content: counter(step);
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--ink);
+      color: var(--paper);
+      font-weight: 760;
+    }
+
+    .step h3 {
+      margin: 0 0 4px;
+      font-size: 1rem;
+    }
+
+    .step p {
+      margin: 0;
+      color: #3e4843;
+    }
+
+    .matrix {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .problem {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+      overflow: hidden;
+    }
+
+    .problem button {
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: #fbfaf3;
+      padding: 14px 16px;
+      cursor: pointer;
+      color: var(--ink);
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      font-weight: 730;
+    }
+
+    .problem button span:last-child {
+      color: var(--accent);
+      font-weight: 900;
+    }
+
+    .problem .answer {
+      display: none;
+      padding: 0 16px 16px;
+      color: #3e4843;
+    }
+
+    .problem.open .answer { display: block; }
+
+    .source-box {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    figure {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: white;
+    }
+
+    figure img {
+      width: 100%;
+      display: block;
+    }
+
+    figcaption {
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      background: #fbfaf3;
+      border-top: 1px solid var(--line);
+    }
+
+    .checklist {
+      display: grid;
+      gap: 10px;
+    }
+
+    .check {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+
+    .check input {
+      width: 18px;
+      height: 18px;
+      margin-top: 3px;
+      accent-color: var(--accent);
+    }
+
+    .check strong {
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .check span {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .source-note {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    mark {
+      background: #ffdf7a;
+      color: inherit;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+
+    .hidden-by-search { display: none !important; }
+
+    footer {
+      padding: 28px 0 48px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 900px) {
+      header {
+        min-height: 78vh;
+        background:
+          linear-gradient(180deg, rgba(247, 247, 242, 0.98) 0%, rgba(247, 247, 242, 0.86) 62%, rgba(247, 247, 242, 0.48) 100%),
+          url("harness_llm_ops.png") center bottom / 92vw auto no-repeat;
+      }
+
+      .hero {
+        padding-top: 6vh;
+        padding-bottom: 30vh;
+      }
+
+      .nav-inner,
+      .section-head,
+      .diagram,
+      .source-box {
+        grid-template-columns: 1fr;
+      }
+
+      .nav-inner {
+        display: grid;
+        gap: 8px;
+      }
+
+      .search { flex: 1; }
+
+      .span-4,
+      .span-5,
+      .span-6,
+      .span-7,
+      .span-8 {
+        grid-column: span 12;
+      }
+
+      .matrix {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="shell hero">
+      <div class="eyebrow">Source-grounded reconstruction</div>
+      <h1>Harness and LLM Ops</h1>
+      <p class="lede">The model is not the system. The harness controls context, memory, tools, loops, and guardrails; LLM Ops traces every run, scores behavior, diagnoses failures, and gates improvements back into the harness.</p>
+      <div class="hero-actions">
+        <a class="btn primary" href="#map">Explore the map</a>
+        <a class="btn" href="#build">Build checklist</a>
+        <a class="btn" href="#sources">Sources</a>
+      </div>
+    </div>
+  </header>
+
+  <nav class="sticky" aria-label="Page sections">
+    <div class="shell nav-inner">
+      <div class="nav-links">
+        <a href="#thesis">Thesis</a>
+        <a href="#map">Architecture</a>
+        <a href="#memory">Memory</a>
+        <a href="#loop">Loop</a>
+        <a href="#ops">LLM Ops</a>
+        <a href="#diagnostics">Diagnostics</a>
+        <a href="#build">Build</a>
+        <a href="#sources">Sources</a>
+      </div>
+      <label class="search">
+        <span>Search</span>
+        <input id="searchInput" type="search" placeholder="Search notes, metrics, guardrails..." />
+      </label>
+    </div>
+  </nav>
+
+  <main class="shell">
+    <section id="thesis" data-search-section>
+      <div class="section-head">
+        <h2>The core idea</h2>
+        <p>The video frames four buzzwords as one architecture: harness, loop engineering, evals, and LLM Ops are simple control systems around a probabilistic model.</p>
+      </div>
+
+      <div class="grid">
+        <div class="card span-8">
+          <div class="quote">Let the model think probabilistically; make the harness act deterministically.</div>
+        </div>
+        <div class="card span-4">
+          <div class="kicker">One-sentence compression</div>
+          <p>Build the agent as a controlled loop, persist only the right memories, instrument every run, evaluate outputs and trajectories, diagnose failures, and release prompt/model/tool/RAG changes through gates.</p>
+        </div>
+        <div class="card span-4">
+          <h3>Harness</h3>
+          <p>Runtime control: prompt assembly, working memory, durable memory retrieval, tool permissions, loop execution, and stop conditions. The transcript compares it to controlling a powerful horse. <span class="timestamp">3:38-5:07</span></p>
+        </div>
+        <div class="card span-4">
+          <h3>Loop engineering</h3>
+          <p>The repeated think-call-observe cycle that lets an agent use tools until the task is done. Its main risk is not knowing when to stop. <span class="timestamp">10:00-13:20</span></p>
+        </div>
+        <div class="card span-4">
+          <h3>LLM Ops</h3>
+          <p>The outer improvement loop: trace each run, evaluate quality, observe health, diagnose root cause, and release safer prompt/config/tool/retrieval changes. <span class="timestamp">14:18-18:58</span></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="map" data-search-section>
+      <div class="section-head">
+        <h2>Two loops, one system</h2>
+        <p>Click any node. The left lane is the agent runtime; the right lane is the production improvement loop.</p>
+      </div>
+
+      <div class="diagram">
+        <div class="lane">
+          <h3>Harness <span class="pill">inner loop</span></h3>
+          <div class="node-list">
+            <button class="node active" data-title="User prompt" data-time="0:43-1:51" data-detail="The run starts with what the user asks now, plus current chat history and the system prompt. The transcript stresses that this run is ephemeral: the context exists for the run, then disappears unless deliberately saved.">
+              <strong>User prompt + chat history</strong>
+              <small>What the agent sees for this run</small>
+            </button>
+            <button class="node" data-title="Working memory / context RAM" data-time="1:22-1:51" data-detail="Working memory is the temporary prompt context assembled for the current run. It is RAM, not durable memory. Good harnesses assemble it from task, history, system policy, retrieved memory, and tool observations.">
+              <strong>Working memory / context RAM</strong>
+              <small>Temporary context assembly</small>
+            </button>
+            <button class="node" data-title="Memory retrieval" data-time="1:52-9:59" data-detail="Procedural, semantic, and episodic memories feed the run. Retrieval differs by memory type: semantic memory is usually relevance/RAG-oriented, while episodic memory often needs SQL for recency plus semantic search for meaning.">
+              <strong>Procedural + semantic + episodic memory</strong>
+              <small>Skills, facts, and events</small>
+            </button>
+            <button class="node" data-title="LLM Q&A agent" data-time="3:38-5:07" data-detail="The model is the stochastic policy inside the harness. It predicts possible next actions or words, but the harness decides what context it gets, which tools it may call, and when the run is allowed to finish.">
+              <strong>LLM agent</strong>
+              <small>Proposes reasoning and actions</small>
+            </button>
+            <button class="node" data-title="Tool loop" data-time="10:00-13:20" data-detail="The agent may schedule meetings, read/write CRM data, or fetch payment information. Each tool response becomes an observation that can trigger another step until the task is complete or blocked.">
+              <strong>Tool loop</strong>
+              <small>Call tools, observe results, continue</small>
+            </button>
+            <button class="node" data-title="End-loop guardrails" data-time="12:53-14:17" data-detail="The run needs explicit ending scenarios: task done, unsafe action blocked, human approval needed, budget exhausted, or no progress detected. A Claude Code hook that notifies the user when permission is pending is an example of loop control.">
+              <strong>End-loop guardrails</strong>
+              <small>Stop safely or ask for input</small>
+            </button>
+          </div>
+        </div>
+
+        <div class="lane">
+          <h3>LLM Ops <span class="pill">outer loop</span></h3>
+          <div class="node-list">
+            <button class="node" data-title="Trace" data-time="15:56-16:42" data-detail="One trace per run records the tree of events: input, retrieved context, tool calls, tool results, latency, token usage, and final reply. Langfuse and LangSmith are named as examples.">
+              <strong>Trace</strong>
+              <small>Record the run as an event tree</small>
+            </button>
+            <button class="node" data-title="Eval" data-time="16:43-17:20" data-detail="Evaluation asks whether the run was good. It can combine deterministic checks with LLM-as-judge scoring, for example whether a scheduled meeting was actually triggered or whether an answer satisfied a rubric.">
+              <strong>Eval</strong>
+              <small>Was the behavior good?</small>
+            </button>
+            <button class="node" data-title="Observe" data-time="16:43-18:15" data-detail="Observation asks whether the system was healthy: latency, token use, cost, tool failures, retrieval count, and response time. Health metrics reveal problems that final-answer scoring may miss.">
+              <strong>Observe</strong>
+              <small>Was the runtime healthy?</small>
+            </button>
+            <button class="node" data-title="Diagnose" data-time="17:21-18:15" data-detail="Diagnosis asks where and why the system broke: missing tool trigger, slow retrieval, oversized working memory, bad model routing, or unnecessary retrieval for simple questions.">
+              <strong>Diagnose</strong>
+              <small>Find the root cause</small>
+            </button>
+            <button class="node" data-title="Gate" data-time="18:16-18:58" data-detail="The gate decides whether the change is safe to ship. If evals fail, fix the bug, rerun the agent, retrace the run, and reevaluate.">
+              <strong>Gate</strong>
+              <small>Pass/fail release decision</small>
+            </button>
+            <button class="node" data-title="Release" data-time="18:16-19:49" data-detail="A release can be a prompt version, model config, tool change, retrieval parameter, or memory policy. The output of LLM Ops feeds back into the harness.">
+              <strong>Release</strong>
+              <small>Ship prompt/config/tool/RAG updates</small>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="nodeDetail" class="detail-panel" aria-live="polite">
+        <h4>User prompt</h4>
+        <p>The run starts with what the user asks now, plus current chat history and the system prompt. The transcript stresses that this run is ephemeral: the context exists for the run, then disappears unless deliberately saved.</p>
+        <span class="timestamp">Source timestamp: 0:43-1:51</span>
+      </div>
+    </section>
+
+    <section id="memory" data-search-section>
+      <div class="section-head">
+        <h2>Memory is not one thing</h2>
+        <p>The transcript separates how-to instructions, durable facts, and dated events. The harness should store and retrieve them differently.</p>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Memory types">
+        <button class="tab" role="tab" aria-selected="true" data-tab="procedural">Procedural</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="semantic">Semantic</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="episodic">Episodic</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="distill">Distill</button>
+      </div>
+
+      <div id="procedural" class="tab-panel active">
+        <table>
+          <thead><tr><th>Question</th><th>Answer</th><th>Design implication</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>What is it?</td>
+              <td>How the agent should act: skills, rules, operating instructions, tool usage policy.</td>
+              <td>Keep it explicit and versioned as files, not buried in vague prompts.</td>
+            </tr>
+            <tr>
+              <td>Source basis</td>
+              <td>The video describes procedural memory as files/text and "skills instructions." <span class="timestamp">1:52-2:05, 5:29-5:47</span></td>
+              <td>Use `SKILL.md`, repo rules, system prompts, and acceptance criteria.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="semantic" class="tab-panel">
+        <table>
+          <thead><tr><th>Question</th><th>Answer</th><th>Design implication</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>What is it?</td>
+              <td>Durable facts: user profile, project facts, business facts, stable preferences.</td>
+              <td>Retrieve by topical relevance, usually via embeddings/vector search plus metadata filters.</td>
+            </tr>
+            <tr>
+              <td>Source basis</td>
+              <td>The video uses facts about who Sean is and what he built as the semantic-memory example. <span class="timestamp">2:06-2:35</span></td>
+              <td>Write stable facts only after validation; avoid turning transient chat noise into durable truth.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="episodic" class="tab-panel">
+        <table>
+          <thead><tr><th>Question</th><th>Answer</th><th>Design implication</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>What is it?</td>
+              <td>Past events, conversation history, triggers, and dated interactions.</td>
+              <td>Use a time-indexed store. Combine SQL for recency with semantic search for meaning.</td>
+            </tr>
+            <tr>
+              <td>Source basis</td>
+              <td>The video calls episodic memory a time series and contrasts recent-conversation SQL lookup with complaint-pattern semantic lookup. <span class="timestamp">2:35-3:01, 8:28-9:59</span></td>
+              <td>Store event rows separately from distilled facts. Keep timestamps and provenance.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="distill" class="tab-panel">
+        <div class="grid">
+          <div class="card span-6">
+            <h3>Why a summarizer agent exists</h3>
+            <p>The transcript says memory does not appear from nowhere; messages should be saved, then periodically consolidated into faster, more useful semantic memory. A cheaper model may be appropriate when processing large volumes. <span class="timestamp">5:08-8:27</span></p>
+          </div>
+          <div class="card span-6">
+            <h3>What should be written where</h3>
+            <p>Raw transcripts go to archive or episodic memory. Stable extracted facts go to semantic memory. How-to rules go to procedural memory. Temporary task state stays in working memory only.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="loop" data-search-section>
+      <div class="section-head">
+        <h2>The agent loop</h2>
+        <p>A loop is not a buzzword for "the model thinks." It is the harness-controlled cycle of action, observation, and termination.</p>
+      </div>
+
+      <div class="timeline">
+        <div class="step">
+          <div>
+            <h3>Assemble context</h3>
+            <p>Collect the user request, chat history, system prompt, retrieved memory, and prior tool observations into working memory.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div>
+            <h3>Choose the next action</h3>
+            <p>The LLM proposes whether to answer, retrieve more, call a tool, clarify, or stop.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div>
+            <h3>Authorize the action</h3>
+            <p>The harness checks permissions, risk, budget, schema, and whether human approval is required.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div>
+            <h3>Call the tool and observe</h3>
+            <p>The result is added back to the working state. The transcript examples include CRM reads/writes, scheduling, and payment/refund tools. <span class="timestamp">10:16-12:40</span></p>
+          </div>
+        </div>
+        <div class="step">
+          <div>
+            <h3>Stop or continue</h3>
+            <p>End-loop guardrails decide whether the task is complete, unsafe, blocked, over budget, or awaiting user input. <span class="timestamp">12:53-14:17</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="ops" data-search-section>
+      <div class="section-head">
+        <h2>LLM Ops is the outer control loop</h2>
+        <p>The right-side system in the diagram exists because a harness can run and still be bad, slow, expensive, unsafe, or unreproducible.</p>
+      </div>
+
+      <div class="grid">
+        <div class="card span-4">
+          <div class="kicker">Trace</div>
+          <h3>Record every run</h3>
+          <p>Log prompt versions, retrieved memories, tool calls, tool outputs, final answer, errors, latency, token use, and cost. <span class="timestamp">15:56-16:42</span></p>
+        </div>
+        <div class="card span-4">
+          <div class="kicker">Eval</div>
+          <h3>Score quality</h3>
+          <p>Use deterministic checks where possible and LLM-as-judge where judgment is needed. Score trajectories, not just final prose. <span class="timestamp">16:43-17:20</span></p>
+        </div>
+        <div class="card span-4">
+          <div class="kicker">Observe</div>
+          <h3>Check health</h3>
+          <p>Track latency, tokens, costs, failed tools, retries, context size, retrieval count, and loop length. <span class="timestamp">16:43-18:15</span></p>
+        </div>
+        <div class="card span-6">
+          <div class="kicker">Diagnose</div>
+          <h3>Find what broke</h3>
+          <p>Was the system prompt wrong? Did retrieval miss? Was working memory too large? Did a tool time out? Did the agent use the wrong tool? Did the evaluator approve a bad answer?</p>
+        </div>
+        <div class="card span-6">
+          <div class="kicker">Gate and release</div>
+          <h3>Ship only passing changes</h3>
+          <p>A release can be a new prompt, model config, tool schema, memory rule, or RAG parameter. If the eval does not pass, rerun, retrace, and reevaluate before shipping. <span class="timestamp">18:16-18:58</span></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="diagnostics" data-search-section>
+      <div class="section-head">
+        <h2>Failure diagnosis</h2>
+        <p>Use these as starting hypotheses when a run looks wrong in the trace or metrics.</p>
+      </div>
+
+      <div class="matrix">
+        <div class="problem open">
+          <button type="button"><span>Agent loops forever</span><span>+</span></button>
+          <div class="answer">Likely missing max-iteration limits, no-progress detection, clear success criteria, or human-approval boundaries.</div>
+        </div>
+        <div class="problem">
+          <button type="button"><span>Latency explodes</span><span>+</span></button>
+          <div class="answer">Look for slow tools, repeated retries, oversized working memory, unnecessary retrieval, or an expensive model on a simple route.</div>
+        </div>
+        <div class="problem">
+          <button type="button"><span>Answer is hallucinated</span><span>+</span></button>
+          <div class="answer">Check whether relevant memory/documents were retrieved, whether evidence was required, and whether the final-answer validator checked grounding.</div>
+        </div>
+        <div class="problem">
+          <button type="button"><span>Tool action never happens</span><span>+</span></button>
+          <div class="answer">Inspect tool schema, permissions, planner prompt, and whether the task was clarified into an executable endpoint.</div>
+        </div>
+        <div class="problem">
+          <button type="button"><span>Cost rises over time</span><span>+</span></button>
+          <div class="answer">Suspect memory bloat, context stuffing, high top-k retrieval, judge overuse, excessive traces, or no model-routing policy.</div>
+        </div>
+        <div class="problem">
+          <button type="button"><span>Eval passes but user is unhappy</span><span>+</span></button>
+          <div class="answer">The judge rubric is too weak. Convert the failure into a regression case, add adversarial checks, and evaluate the whole trajectory.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="build" data-search-section>
+      <div class="section-head">
+        <h2>Minimal buildable harness</h2>
+        <p>A solo developer does not need enterprise infrastructure. Start with explicit files, local traces, a small eval suite, and release gates.</p>
+      </div>
+
+      <div class="grid">
+        <div class="card span-5">
+          <h3>Suggested project skeleton</h3>
+          <pre><code>agent-harness/
+  ai/
+    project_brief.md
+    architecture.md
+    rules.md
+    acceptance_criteria.md
+  skills/
+    research/SKILL.md
+    coding/SKILL.md
+  memory/
+    semantic.jsonl
+    episodic.sqlite
+  evals/
+    golden_cases.jsonl
+    rubrics/
+  traces/
+    runs.jsonl
+  src/
+    context_assembler.py
+    agent_loop.py
+    tools.py
+    permissions.py
+    evaluator.py
+    release_gate.py</code></pre>
+        </div>
+        <div class="span-7">
+          <div class="checklist">
+            <label class="check"><input type="checkbox" /><span><strong>Version procedural memory.</strong><span>Keep instructions, skills, repo rules, and acceptance criteria inspectable.</span></span></label>
+            <label class="check"><input type="checkbox" /><span><strong>Separate memory classes.</strong><span>Do not mix skills, facts, and dated events in one undifferentiated store.</span></span></label>
+            <label class="check"><input type="checkbox" /><span><strong>Put tools behind permissions.</strong><span>The LLM proposes actions; the harness authorizes and executes them.</span></span></label>
+            <label class="check"><input type="checkbox" /><span><strong>Trace every important run.</strong><span>Capture inputs, retrievals, tool calls, outputs, versions, cost, latency, and errors.</span></span></label>
+            <label class="check"><input type="checkbox" /><span><strong>Evaluate trajectories.</strong><span>Check tool selection, grounding, permissions, termination, and final output.</span></span></label>
+            <label class="check"><input type="checkbox" /><span><strong>Gate releases.</strong><span>Prompt/config/tool/RAG changes should pass old evals and stay within cost/latency budget.</span></span></label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sources" data-search-section>
+      <div class="section-head">
+        <h2>Source notes</h2>
+        <p>This artifact was reconstructed from the local source pack in the workspace.</p>
+      </div>
+
+      <div class="source-box">
+        <figure>
+          <img src="harness_llm_ops.png" alt="Diagram showing agent harness on the left and LLM Ops feedback loop on the right" />
+          <figcaption>Local image source: `harness_llm_ops.png`</figcaption>
+        </figure>
+        <div class="grid">
+          <div class="card span-12">
+            <h3>Text source: `transcript.txt`</h3>
+            <p class="source-note">Raw YouTube transcript for Sean's tutorial. Key timestamps are cited throughout the page.</p>
+          </div>
+          <div class="card span-12">
+            <h3>Text source: `gpt5.5_summary.txt`</h3>
+            <p class="source-note">Prior reconstructed tutorial from the diagram. I used it as a cross-check for diagram labels, structure, and the practical build framing.</p>
+          </div>
+          <div class="card span-12">
+            <h3>Reconstruction boundary</h3>
+            <p class="source-note">The transcript gives the spoken explanation; the summary captures detailed diagram labels. The practical skeleton and failure matrix are synthesized from those source claims rather than direct quotes.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell">Standalone HTML artifact. No external libraries required.</div>
+  </footer>
+
+  <script>
+    const detail = document.getElementById("nodeDetail");
+    document.querySelectorAll(".node").forEach((node) => {
+      node.addEventListener("click", () => {
+        document.querySelectorAll(".node").forEach((n) => n.classList.remove("active"));
+        node.classList.add("active");
+        detail.innerHTML = `
+          <h4>${node.dataset.title}</h4>
+          <p>${node.dataset.detail}</p>
+          <span class="timestamp">Source timestamp: ${node.dataset.time}</span>
+        `;
+      });
+    });
+
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const target = tab.dataset.tab;
+        document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t === tab)));
+        document.querySelectorAll(".tab-panel").forEach((panel) => {
+          panel.classList.toggle("active", panel.id === target);
+        });
+      });
+    });
+
+    document.querySelectorAll(".problem button").forEach((button) => {
+      button.addEventListener("click", () => {
+        const problem = button.closest(".problem");
+        problem.classList.toggle("open");
+      });
+    });
+
+    const sections = [...document.querySelectorAll("main section")];
+    const navLinks = [...document.querySelectorAll(".nav-links a")];
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      navLinks.forEach((link) => {
+        link.classList.toggle("active", link.getAttribute("href") === `#${visible.target.id}`);
+      });
+    }, { rootMargin: "-20% 0px -65% 0px", threshold: [0.1, 0.25, 0.5] });
+    sections.forEach((section) => observer.observe(section));
+
+    const searchInput = document.getElementById("searchInput");
+    const searchable = [...document.querySelectorAll("[data-search-section]")];
+    searchInput.addEventListener("input", () => {
+      const query = searchInput.value.trim().toLowerCase();
+      searchable.forEach((section) => {
+        const match = !query || section.innerText.toLowerCase().includes(query);
+        section.classList.toggle("hidden-by-search", !match);
+      });
+    });
+  </script>
+</body>
+</html>
